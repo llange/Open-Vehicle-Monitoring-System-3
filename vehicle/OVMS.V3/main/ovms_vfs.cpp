@@ -184,6 +184,148 @@ void vfs_ls(int verbosity, OvmsWriter* writer, OvmsCommand* cmd, int argc, const
   list_entries(writer, (argc==0) ? "." : argv[0], false);
 }
 
+/**
+ * This class is a kind of wrapper around dirent
+ */
+class Direntry {
+  public:
+    std::string basepath; // base path of the file / directory (parent dir) - always ending with '/'
+    std::string name;     // name of the file / dirctory
+    bool is_dir;          // `true`: is a directory, `false`: is a file
+    bool is_protected;    // `true`: this path is protected
+    bool is_skip;         // `true`: we should not analyze this entry
+    int64_t size;         // size
+    time_t mtime;         // modification time
+
+    /**
+     * Default constructor, calls stat() on the file.
+     */
+    Direntry(std::string basepath, struct dirent *direntry) {
+      struct stat st;
+      this->basepath = basepath + '/';
+      name = direntry->d_name;
+      is_protected = MyConfig.ProtectedPath(path());
+      stat(path().c_str(), &st);
+      is_dir = S_ISDIR(st.st_mode);
+      is_skip = (!S_ISDIR(st.st_mode) && !S_ISREG(st.st_mode)) || (direntry->d_name[0] == '.');
+      size = st.st_size;
+      mtime = st.st_mtime;
+    }
+
+    std::string path() const {
+      return basepath + name;
+    }
+
+    bool operator<(const Direntry &other) const {
+      static std::less<std::string> const less;
+      return less(path(), other.path());
+    }
+
+    void display(OvmsWriter* writer, bool show_full_path) {
+      char bufsize[64], mod[64];
+
+      if (is_dir) {
+        if (is_protected) {
+          strcpy(bufsize, "[P][DIR]");
+        } else {
+          strcpy(bufsize, "[DIR]   ");
+        }
+      } else {
+        if (is_protected) {
+          strcpy(bufsize, "[P]     ");
+        } else {
+          if (size < 1024) {
+            snprintf(bufsize, sizeof(bufsize), "%d ", (int) size);
+          } else if (size < 0x100000) {
+            snprintf(bufsize, sizeof(bufsize), "%.1fk", (double) size / 1024.0);
+          } else if (size < 0x40000000) {
+            snprintf(bufsize, sizeof(bufsize), "%.1fM", (double) size / 1048576);
+          } else {
+            snprintf(bufsize, sizeof(bufsize), "%.1fG", (double) size / 1073741824);
+          }
+        }
+      }
+      strftime(mod, sizeof(mod), "%d-%b-%Y %H:%M", localtime(&mtime));
+
+      const char *slash = is_dir ? "/" : "";
+
+      writer->printf("%8.8s  %17.17s  %s%s\n", bufsize, mod, show_full_path ? path().c_str() : name.c_str(), slash);
+    }
+};
+
+/**
+ * Fills a `std::set<Direntry>` with all possible entries starting at `startpath`.
+ * if `recurse` is `true`, then all possible directories are recursively entered.
+ */
+void list_entries(std::set<Direntry> &entries, std::string startpath, bool recurse = true) {
+  DIR *dir;
+  struct dirent *dp;
+
+  if ((dir = opendir(startpath.c_str())) != NULL) {
+    while ((dp = readdir(dir)) != NULL) {
+      Direntry dirent(startpath, dp);
+      if (dirent.is_skip) {
+        continue;
+      }
+      entries.insert(dirent);
+      if (recurse && dirent.is_dir && !dirent.is_protected) {
+        list_entries(entries, dirent.path());
+      }
+    }
+    closedir(dir);
+  }
+}
+
+/**
+ * Fills a `std::set<Direntry>` with all possible entries, and display the sorted result.
+ * if `recurse` is `true`:
+ * - all possible directories are recursively entered,
+ * - the display shows the full file path
+ * if `recurse` is `false`:
+ * - only `startpath` is listed,
+ * - the display shows only file / directory name
+ */
+void list_entries_and_display(OvmsWriter* writer, std::string startpath, bool recurse = true) {
+  std::set<Direntry> entries;
+
+  while((startpath.back() == '/') || (startpath.back() == '.')) {
+    startpath.pop_back();
+  }
+
+  if (MyConfig.ProtectedPath(startpath)) {
+    writer->puts("Error: protected path");
+    return;
+  }
+
+  list_entries(entries, startpath, recurse);
+
+  for (auto it = entries.begin(); it != entries.end(); it++) {
+    Direntry dirent = *it;
+    dirent.display(writer, recurse);
+  }
+}
+
+/**
+ * Recursive listing of the files and directories starting at `argv[0]` (or '.')
+ * - all possible directories are recursively entered,
+ * - the display shows the full file / directory path
+ * - protected directories are identified and not entered
+ */
+void vfs_rls(int verbosity, OvmsWriter* writer, OvmsCommand* cmd, int argc, const char* const* argv) {
+  list_entries_and_display(writer, (argc==0) ? "." : argv[0], true);
+}
+
+#if 0
+/**
+ * Listing of the files and directories at `argv[0]` (or '.')
+ * - the display shows only the file  / directory name
+ * - protected directories are identified
+ */
+void vfs_ls(int verbosity, OvmsWriter* writer, OvmsCommand* cmd, int argc, const char* const* argv) {
+  list_entries_and_display(writer, (argc==0) ? "." : argv[0], false);
+}
+#endif
+
 void vfs_cat(int verbosity, OvmsWriter* writer, OvmsCommand* cmd, int argc, const char* const* argv)
   {
   if (MyConfig.ProtectedPath(argv[0]))
