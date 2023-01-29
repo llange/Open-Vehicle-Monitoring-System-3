@@ -19,7 +19,7 @@
 #define DEFAULT_MAX_PACKET_SZ (1024*2)
 #define WOLFSSH_LOG_PRINTF
 
-// For compatibility of WolfSSL with ESP-IDF
+// // For compatibility of WolfSSL with ESP-IDF
 
 #define WOLFSSL_ESPIDF
 #define WOLFSSL_ESPWROOM32
@@ -84,7 +84,6 @@
 #define WOLFSSL_SHA224
 //#define WOLFSSL_SHA3
 #define WOLFSSL_SHA384
-#define WOLFSSL_SHA512
 #define WOLFSSL_CERT_EXT
 #define NO_WOLFSSL_STUB
 #define WOLFSSL_OLD_PRIME_CHECK
