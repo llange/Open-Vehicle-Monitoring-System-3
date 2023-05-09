@@ -2,6 +2,7 @@
 Boot Status
 ===========
 
+TEST
 OVMS maintains a record of the reason for each boot, in RAM that survives a reboot. It can show you how long the module has been running for, and the reason for the last reboot::
 
   OVMS# boot status
