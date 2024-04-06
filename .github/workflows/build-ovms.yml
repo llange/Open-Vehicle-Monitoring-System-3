@@ -65,7 +65,7 @@ jobs:
             sdkconfig: "sdkconfig.defaults.esp3"
             patch_mongoose_6_11: false
             patch_esp_idf_ovms: true
-            force_wolfssl_470: true
+            # force_wolfssl_470: true
             # force_wolfssl_470: false
 
     # The type of runner that the job will run on
